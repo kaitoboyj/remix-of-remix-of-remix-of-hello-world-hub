@@ -13,6 +13,9 @@ export function decodeChatMode(code: number | null | undefined): ChatMode {
 
 export const DEFAULT_CHAT_LABEL = "Contact support";
 
+/** Shown as the first message in every support chat unless an admin edits it. */
+export const DEFAULT_WELCOME_MESSAGE = "Official Prime Capital Support\nyou are welcome";
+
 export interface SupportMessage {
   id: string;
   sender: "user" | "admin";
