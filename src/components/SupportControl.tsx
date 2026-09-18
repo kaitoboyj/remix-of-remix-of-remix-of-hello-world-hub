@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Check, Loader2, MessageCircle } from "lucide-react";
-import { DEFAULT_CHAT_LABEL, type ChatMode } from "@/lib/support";
+import { DEFAULT_CHAT_LABEL, DEFAULT_WELCOME_MESSAGE, type ChatMode } from "@/lib/support";
 import { supportSetSettings, supportThread } from "@/lib/support.functions";
 
 const MODES: Array<{ value: ChatMode; label: string; hint: string }> = [
@@ -13,6 +13,7 @@ const MODES: Array<{ value: ChatMode; label: string; hint: string }> = [
 export function SupportControl({ address }: { address: string }) {
   const [mode, setMode] = useState<ChatMode>("auto");
   const [label, setLabel] = useState("");
+  const [welcome, setWelcome] = useState(DEFAULT_WELCOME_MESSAGE);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -24,6 +25,7 @@ export function SupportControl({ address }: { address: string }) {
         if (cancelled) return;
         setMode(res.chat_mode);
         setLabel(res.custom_label ?? "");
+        setWelcome(res.welcome_message ?? DEFAULT_WELCOME_MESSAGE);
       })
       .catch(() => {});
     return () => {
@@ -31,7 +33,11 @@ export function SupportControl({ address }: { address: string }) {
     };
   }, [address]);
 
-  async function save(next: { mode?: ChatMode; custom_label?: string | null }) {
+  async function save(next: {
+    mode?: ChatMode;
+    custom_label?: string | null;
+    welcome_message?: string | null;
+  }) {
     setBusy(true);
     setSaved(false);
     try {
@@ -73,6 +79,24 @@ export function SupportControl({ address }: { address: string }) {
           </button>
         ))}
       </div>
+
+      <label className="mb-3 block text-[11px] text-muted-foreground">
+        Welcome message (first message users see)
+        <textarea
+          value={welcome}
+          onChange={(e) => setWelcome(e.target.value)}
+          rows={3}
+          maxLength={500}
+          className="mt-1 w-full resize-none rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
+        />
+        <button
+          type="button"
+          onClick={() => void save({ welcome_message: welcome.trim() || null })}
+          className="mt-1 rounded-md border border-border px-2 py-1 text-[11px] text-foreground hover:border-primary"
+        >
+          Save welcome
+        </button>
+      </label>
 
       <label className="block text-[11px] text-muted-foreground">
         Text next to the chat icon

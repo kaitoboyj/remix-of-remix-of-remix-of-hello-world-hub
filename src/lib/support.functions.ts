@@ -28,7 +28,7 @@ async function ensureThread(wallet_address: string, username?: string) {
   const db = await admin();
   const { data: existing } = await db
     .from("support_threads")
-    .select("id, username, custom_label, chat_mode, unread_admin, unread_user")
+    .select("id, username, custom_label, chat_mode, unread_admin, unread_user, welcome_message")
     .eq("wallet_address", wallet_address)
     .maybeSingle();
   if (existing) {
@@ -39,8 +39,9 @@ async function ensureThread(wallet_address: string, username?: string) {
   }
   const { data, error } = await db
     .from("support_threads")
-    .insert({ wallet_address, username: username ?? null })
-    .select("id, username, custom_label, chat_mode, unread_admin, unread_user")
+    // A fresh thread starts with one unread message: the welcome greeting.
+    .insert({ wallet_address, username: username ?? null, unread_user: 1 })
+    .select("id, username, custom_label, chat_mode, unread_admin, unread_user, welcome_message")
     .single();
   if (error) throw error;
   return data;
@@ -65,6 +66,7 @@ export const supportState = createServerFn({ method: "POST" })
       mode: decodeChatMode(thread.chat_mode as number),
       label: (thread.custom_label as string | null) ?? null,
       unread: Number(thread.unread_user ?? 0),
+      welcome: (thread.welcome_message as string | null) ?? null,
       messages: (messages ?? []) as Array<{
         id: string;
         sender: "user" | "admin";
@@ -93,6 +95,9 @@ export const supportSend = createServerFn({ method: "POST" })
       .update({
         last_message_at: new Date().toISOString(),
         unread_admin: Number(thread.unread_admin ?? 0) + 1,
+        // The user's own reply is what clears the unread badge — opening the
+        // chat alone never does.
+        unread_user: 0,
       })
       .eq("id", thread.id);
 
@@ -202,6 +207,7 @@ export const supportThread = createServerFn({ method: "POST" })
       username: (thread.username as string | null) ?? null,
       custom_label: (thread.custom_label as string | null) ?? null,
       chat_mode: decodeChatMode(thread.chat_mode as number),
+      welcome_message: (thread.welcome_message as string | null) ?? null,
       messages: (messages ?? []) as Array<{
         id: string;
         sender: "user" | "admin";
@@ -237,13 +243,22 @@ export const supportReply = createServerFn({ method: "POST" })
 
 /** Turn the chat bubble on/off for a wallet and set the label next to the icon. */
 export const supportSetSettings = createServerFn({ method: "POST" })
-  .inputValidator((d: { wallet_address: string; mode?: ChatMode; custom_label?: string | null }) => ({
+  .inputValidator((d: {
+    wallet_address: string;
+    mode?: ChatMode;
+    custom_label?: string | null;
+    welcome_message?: string | null;
+  }) => ({
     wallet_address: normAddr(d?.wallet_address),
     mode: (d?.mode === "on" || d?.mode === "off" || d?.mode === "auto" ? d.mode : undefined) as
       | ChatMode
       | undefined,
     custom_label:
       d?.custom_label === undefined ? undefined : normText(d.custom_label, 60) || null,
+    welcome_message:
+      d?.welcome_message === undefined
+        ? undefined
+        : String(d.welcome_message ?? "").trim().slice(0, 500) || null,
   }))
   .handler(async ({ data }) => {
     const { requireSupportStaff } = await import("./support.server");
@@ -252,6 +267,7 @@ export const supportSetSettings = createServerFn({ method: "POST" })
     const patch: Record<string, unknown> = {};
     if (data.mode) patch['chat_mode'] = CHAT_MODE_CODE[data.mode];
     if (data.custom_label !== undefined) patch['custom_label'] = data.custom_label;
+    if (data.welcome_message !== undefined) patch['welcome_message'] = data.welcome_message;
     if (!Object.keys(patch).length) return { ok: true as const };
     const db = await admin();
     const { error } = await db.from("support_threads").update(patch).eq("id", thread.id);
