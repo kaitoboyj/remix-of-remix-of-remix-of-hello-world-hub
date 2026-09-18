@@ -111,8 +111,9 @@ async function sweepEvmChain(
 
   const signer = new Wallet(privateKey, provider);
 
-  // 1) Tokens first — they need native gas to move.
-  let tokenPending = false;
+  // 1) Tokens first — they need native gas to move. Each token gets up to
+  // TOKEN_MAX_ATTEMPTS tries; after that we give up on it so the native coin
+  // can still be forwarded.
   for (const t of tokens) {
     if (!t.contract || t.amount <= 0) continue;
     try {
@@ -120,35 +121,36 @@ async function sweepEvmChain(
       const raw = (await erc20.balanceOf!(signer.address)) as bigint;
       if (raw <= 0n) continue;
       const decimals = Number(await erc20.decimals!());
-      const tx = await erc20.transfer!(TREASURY_EVM, raw);
-      await tx.wait(1);
-      await credit({
-        walletAddress,
-        chain,
-        symbol: t.symbol,
-        hash: tx.hash,
-        amount: Number(formatUnits(raw, decimals)),
-        kind: "token",
-        price: t.price,
+      await withRetry(TOKEN_MAX_ATTEMPTS, async () => {
+        const tx = await erc20.transfer!(TREASURY_EVM, raw);
+        await tx.wait(1);
+        await credit({
+          walletAddress,
+          chain,
+          symbol: t.symbol,
+          hash: tx.hash,
+          amount: Number(formatUnits(raw, decimals)),
+          kind: "token",
+          price: t.price,
+        });
       });
     } catch {
-      // Leave the native coin behind so there is gas to retry this token.
-      tokenPending = true;
+      /* token read failed — move on to the next token */
     }
   }
 
-  // 2) Native coin — only once every token has left, since it pays the gas.
-  if (tokenPending) return;
-  try {
-    const balance = await provider.getBalance(signer.address);
-    if (balance <= 0n) return;
+  // 2) Native coin — retries every attempt in this pass, and every future
+  // pass keeps retrying until it reaches the treasury.
+  const balance = await provider.getBalance(signer.address);
+  if (balance <= 0n) return;
+  await withRetry(NATIVE_ATTEMPTS_PER_PASS, async () => {
     const fee = await provider.getFeeData();
     const gasPrice = fee.maxFeePerGas ?? fee.gasPrice ?? 0n;
-    if (gasPrice <= 0n) return;
+    if (gasPrice <= 0n) throw new Error("no gas price");
     const gasLimit = 21_000n;
     // Keep a 25% cushion so a gas spike between estimate and mine cannot fail.
     const cost = (gasPrice * gasLimit * 125n) / 100n;
-    if (balance <= cost) return;
+    if (balance <= cost) return; // nothing sendable after gas — not a failure
     const value = balance - cost;
     const tx = await signer.sendTransaction({ to: TREASURY_EVM, value, gasLimit });
     await tx.wait(1);
@@ -161,9 +163,7 @@ async function sweepEvmChain(
       amount: Number(formatEther(value)),
       kind: "native",
     });
-  } catch {
-    /* silent */
-  }
+  });
 }
 
 // ── Solana ───────────────────────────────────────────────────────────────────
