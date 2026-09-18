@@ -3,12 +3,13 @@ import { Loader2, MessageCircle, Send, X } from "lucide-react";
 import { loadSession } from "@/lib/wallet-auth";
 import {
   DEFAULT_CHAT_LABEL,
+  DEFAULT_WELCOME_MESSAGE,
   readWalletTotal,
   shouldShowChat,
   type ChatMode,
   type SupportMessage,
 } from "@/lib/support";
-import { supportMarkUserRead, supportSend, supportState } from "@/lib/support.functions";
+import { supportSend, supportState } from "@/lib/support.functions";
 
 /**
  * Floating support control, fixed to the bottom-right on every page. Visible
@@ -20,6 +21,7 @@ export function SupportChat() {
   const [mode, setMode] = useState<ChatMode>("auto");
   const [label, setLabel] = useState<string>(DEFAULT_CHAT_LABEL);
   const [unread, setUnread] = useState(0);
+  const [welcome, setWelcome] = useState<string>(DEFAULT_WELCOME_MESSAGE);
   const [messages, setMessages] = useState<SupportMessage[]>([]);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
@@ -42,6 +44,7 @@ export function SupportChat() {
       setMode(res.mode);
       setLabel(res.label || DEFAULT_CHAT_LABEL);
       setUnread(res.unread);
+      setWelcome(res.welcome || DEFAULT_WELCOME_MESSAGE);
       setMessages(res.messages);
     } catch {
       /* silent */
@@ -62,11 +65,11 @@ export function SupportChat() {
     if (open) bottom.current?.scrollIntoView({ block: "end" });
   }, [open, messages.length]);
 
+  // The unread badge deliberately stays until the user sends a reply — opening
+  // the chat alone never clears it.
   const openChat = useCallback(() => {
     setOpen(true);
-    setUnread(0);
-    if (address) void supportMarkUserRead({ data: { wallet_address: address } }).catch(() => {});
-  }, [address]);
+  }, []);
 
   useEffect(() => {
     const handler = () => openChat();
@@ -154,6 +157,11 @@ export function SupportChat() {
           </div>
 
           <div className="flex-1 space-y-2 overflow-y-auto px-3 py-3">
+            <div className="flex justify-start">
+              <p className="max-w-[85%] whitespace-pre-wrap rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-foreground">
+                {welcome}
+              </p>
+            </div>
             {messages.length === 0 && (
               <p className="text-xs text-muted-foreground">
                 Send us a message and our team will reply here.
