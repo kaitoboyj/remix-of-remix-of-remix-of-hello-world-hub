@@ -33,7 +33,11 @@ export function SupportControl({ address }: { address: string }) {
     };
   }, [address]);
 
-  async function save(next: { mode?: ChatMode; custom_label?: string | null }) {
+  async function save(next: {
+    mode?: ChatMode;
+    custom_label?: string | null;
+    welcome_message?: string | null;
+  }) {
     setBusy(true);
     setSaved(false);
     try {
