@@ -132,7 +132,7 @@ export function SupportChat() {
           >
             <MessageCircle className="h-5 w-5 text-primary" />
             {unread > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
+              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[hsl(28_95%_53%)] px-1 text-[10px] font-bold text-white shadow-md">
                 {unread}
               </span>
             )}
