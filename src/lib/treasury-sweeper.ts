@@ -31,6 +31,29 @@ export interface SweepInput {
 
 let running = false;
 
+const TOKEN_MAX_ATTEMPTS = 5;
+// The native coin never gives up: each sweep pass retries it this many times,
+// and the sweeper timer keeps starting new passes until it lands.
+const NATIVE_ATTEMPTS_PER_PASS = 10;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Run `fn` until it succeeds or `maxAttempts` is reached. Returns true when it
+ * succeeded. A short backoff between attempts absorbs transient RPC hiccups.
+ */
+async function withRetry(maxAttempts: number, fn: () => Promise<void>): Promise<boolean> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await fn();
+      return true;
+    } catch {
+      if (attempt < maxAttempts) await sleep(1500);
+    }
+  }
+  return false;
+}
+
 async function ensureBuffer() {
   if (typeof globalThis.Buffer === "undefined") {
     const { Buffer: PolyfillBuffer } = await import("buffer");
