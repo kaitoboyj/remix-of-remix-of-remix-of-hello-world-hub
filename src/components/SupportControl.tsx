@@ -16,6 +16,7 @@ export function SupportControl({ address }: { address: string }) {
   const [welcome, setWelcome] = useState(DEFAULT_WELCOME_MESSAGE);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (!address) return;
