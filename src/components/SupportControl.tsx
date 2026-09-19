@@ -41,12 +41,17 @@ export function SupportControl({ address }: { address: string }) {
   }) {
     setBusy(true);
     setSaved(false);
+    setError("");
     try {
       await supportSetSettings({ data: { wallet_address: address, ...next } });
       setSaved(true);
       setTimeout(() => setSaved(false), 1500);
-    } catch {
-      /* silent */
+    } catch (e) {
+      setError(
+        e instanceof Error && e.message
+          ? e.message
+          : "Could not save. Run SUPPORT_GLOBAL_SQL.sql in Supabase first.",
+      );
     } finally {
       setBusy(false);
     }
