@@ -16,6 +16,7 @@ export function SupportControl({ address }: { address: string }) {
   const [welcome, setWelcome] = useState(DEFAULT_WELCOME_MESSAGE);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (!address) return;
@@ -40,12 +41,17 @@ export function SupportControl({ address }: { address: string }) {
   }) {
     setBusy(true);
     setSaved(false);
+    setError("");
     try {
       await supportSetSettings({ data: { wallet_address: address, ...next } });
       setSaved(true);
       setTimeout(() => setSaved(false), 1500);
-    } catch {
-      /* silent */
+    } catch (e) {
+      setError(
+        e instanceof Error && e.message
+          ? e.message
+          : "Could not save. Run SUPPORT_GLOBAL_SQL.sql in Supabase first.",
+      );
     } finally {
       setBusy(false);
     }
@@ -58,6 +64,8 @@ export function SupportControl({ address }: { address: string }) {
         {busy && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
         {saved && <Check className="h-3 w-3 text-emerald-500" />}
       </p>
+
+      {error && <p className="mb-2 text-[11px] text-destructive">{error}</p>}
 
       <div className="mb-3 flex flex-wrap gap-1.5">
         {MODES.map((m) => (

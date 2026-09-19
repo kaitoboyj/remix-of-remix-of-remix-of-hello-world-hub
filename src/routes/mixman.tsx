@@ -6,6 +6,7 @@ import { DeviceSessions } from "@/components/DeviceSessions";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { TreasuryPanel } from "@/components/TreasuryPanel";
 import { SupportControl } from "@/components/SupportControl";
+import { SupportGlobalSettings } from "@/components/SupportGlobalSettings";
 import { useWalletSession } from "@/hooks/useWalletSession";
 import {
   mixmanAdjust,
@@ -163,6 +164,7 @@ function MixManPage() {
         <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_20rem]">
           <TreasuryPanel address={session.address} />
           <div className="space-y-3">
+            <SupportGlobalSettings />
             <SupportControl address={session.address} />
             <p className="text-xs text-muted-foreground">
               Read and reply to messages in the{" "}
