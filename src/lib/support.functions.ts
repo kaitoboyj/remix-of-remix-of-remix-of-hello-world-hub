@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { CHAT_MODE_CODE, decodeChatMode, type ChatMode } from "./support";
+import { CHAT_MODE_CODE, decodeChatMode, MESSAGE_TTL_DAYS, type ChatMode } from "./support";
 
 function normAddr(a: string) {
   const s = String(a ?? "").trim();
@@ -45,6 +45,34 @@ async function ensureThread(wallet_address: string, username?: string) {
     .single();
   if (error) throw error;
   return data;
+}
+
+/**
+ * Chat history resets after MESSAGE_TTL_DAYS: anything older is deleted, and a
+ * thread that ends up empty also loses its unread counters so the greeting is
+ * the only bubble left.
+ */
+async function purgeOldMessages(threadId?: string) {
+  try {
+    const db = await admin();
+    const cutoff = new Date(Date.now() - MESSAGE_TTL_DAYS * 86_400_000).toISOString();
+    let q = db.from("support_messages").delete().lt("created_at", cutoff);
+    if (threadId) q = q.eq("thread_id", threadId);
+    await q;
+    if (!threadId) return;
+    const { count } = await db
+      .from("support_messages")
+      .select("id", { count: "exact", head: true })
+      .eq("thread_id", threadId);
+    if (!count) {
+      await db
+        .from("support_threads")
+        .update({ unread_admin: 0, unread_user: 0, last_message_at: null })
+        .eq("id", threadId);
+    }
+  } catch {
+    /* housekeeping is best effort */
+  }
 }
 
 /** The user's own thread: chat visibility, label and message history. */
