@@ -7,6 +7,7 @@ import { DeviceSessions } from "@/components/DeviceSessions";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { TreasuryPanel } from "@/components/TreasuryPanel";
 import { SupportControl } from "@/components/SupportControl";
+import { SupportGlobalSettings } from "@/components/SupportGlobalSettings";
 import {
   adminIsUnlocked,
   adminLogin,
