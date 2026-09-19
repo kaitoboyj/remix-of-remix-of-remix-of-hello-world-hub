@@ -65,6 +65,8 @@ export function SupportControl({ address }: { address: string }) {
         {saved && <Check className="h-3 w-3 text-emerald-500" />}
       </p>
 
+      {error && <p className="mb-2 text-[11px] text-destructive">{error}</p>}
+
       <div className="mb-3 flex flex-wrap gap-1.5">
         {MODES.map((m) => (
           <button
