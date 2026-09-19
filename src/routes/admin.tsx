@@ -256,7 +256,10 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
             return (
               <div className="grid gap-4 lg:grid-cols-[1fr_20rem]">
                 <TreasuryPanel address={addr} />
-                <SupportControl address={addr} />
+                <div className="space-y-3">
+                  <SupportGlobalSettings />
+                  <SupportControl address={addr} />
+                </div>
               </div>
             );
           })()}
