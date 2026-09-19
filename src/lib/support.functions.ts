@@ -62,11 +62,12 @@ export const supportState = createServerFn({ method: "POST" })
       .eq("thread_id", thread.id)
       .order("created_at", { ascending: true })
       .limit(200);
+    const global = await readGlobalSettings();
     return {
       mode: decodeChatMode(thread.chat_mode as number),
-      label: (thread.custom_label as string | null) ?? null,
+      label: (thread.custom_label as string | null) ?? global.chat_label ?? null,
       unread: Number(thread.unread_user ?? 0),
-      welcome: (thread.welcome_message as string | null) ?? null,
+      welcome: (thread.welcome_message as string | null) ?? global.welcome_message ?? null,
       messages: (messages ?? []) as Array<{
         id: string;
         sender: "user" | "admin";
