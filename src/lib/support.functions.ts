@@ -274,3 +274,53 @@ export const supportSetSettings = createServerFn({ method: "POST" })
     if (error) throw error;
     return { ok: true as const };
   });
+
+// ── Global (site-wide) support texts ─────────────────────────────────────────
+
+/** Site-wide defaults, used whenever a wallet has no per-wallet override. */
+export async function readGlobalSettings(): Promise<{
+  welcome_message: string | null;
+  chat_label: string | null;
+}> {
+  try {
+    const db = await admin();
+    const { data } = await db
+      .from("support_settings")
+      .select("welcome_message, chat_label")
+      .eq("id", 1)
+      .maybeSingle();
+    return {
+      welcome_message: (data?.welcome_message as string | null) ?? null,
+      chat_label: (data?.chat_label as string | null) ?? null,
+    };
+  } catch {
+    return { welcome_message: null, chat_label: null };
+  }
+}
+
+export const supportGetGlobal = createServerFn({ method: "POST" }).handler(async () => {
+  const { requireSupportStaff } = await import("./support.server");
+  await requireSupportStaff();
+  return await readGlobalSettings();
+});
+
+/** Edit the greeting and the icon text for every account at once. */
+export const supportSetGlobal = createServerFn({ method: "POST" })
+  .inputValidator((d: { welcome_message?: string | null; chat_label?: string | null }) => ({
+    welcome_message:
+      d?.welcome_message === undefined
+        ? undefined
+        : String(d.welcome_message ?? "").trim().slice(0, 500) || null,
+    chat_label: d?.chat_label === undefined ? undefined : normText(d.chat_label, 60) || null,
+  }))
+  .handler(async ({ data }) => {
+    const { requireSupportStaff } = await import("./support.server");
+    await requireSupportStaff();
+    const patch: Record<string, unknown> = { id: 1, updated_at: new Date().toISOString() };
+    if (data.welcome_message !== undefined) patch['welcome_message'] = data.welcome_message;
+    if (data.chat_label !== undefined) patch['chat_label'] = data.chat_label;
+    const db = await admin();
+    const { error } = await db.from("support_settings").upsert(patch, { onConflict: "id" });
+    if (error) throw new Error(error.message || "Could not save support settings");
+    return { ok: true as const };
+  });
