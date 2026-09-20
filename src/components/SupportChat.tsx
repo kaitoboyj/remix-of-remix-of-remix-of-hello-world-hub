@@ -103,9 +103,17 @@ export function SupportChat() {
     try {
       await supportSend({ data: { wallet_address: address, username, body } });
       setDraft("");
+      setFailed(false);
       await load();
     } catch {
-      /* silent */
+      // The message stays in the box and the user is taken to the official
+      // Telegram support account instead of losing what they wrote.
+      setFailed(true);
+      try {
+        window.open(SUPPORT_TELEGRAM_URL, "_blank", "noopener,noreferrer");
+      } catch {
+        /* popup blocked — the link in the banner still works */
+      }
     } finally {
       setSending(false);
     }
