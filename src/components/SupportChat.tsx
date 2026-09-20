@@ -197,6 +197,20 @@ export function SupportChat() {
             <div ref={bottom} />
           </div>
 
+          {failed && (
+            <p className="border-t border-destructive/30 bg-destructive/10 px-3 py-2 text-[11px] text-destructive">
+              Message could not be sent.{" "}
+              <a
+                href={SUPPORT_TELEGRAM_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold underline"
+              >
+                Chat with support on Telegram
+              </a>
+            </p>
+          )}
+
           <div className="flex items-end gap-2 border-t border-border p-2">
             <textarea
               value={draft}
