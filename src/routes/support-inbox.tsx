@@ -198,6 +198,12 @@ function Inbox({ onLock }: { onLock: () => void }) {
         </div>
       </div>
 
+      {issue && (
+        <p className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          {issue} — run SUPPORT_SETUP_SQL.sql in Supabase and check the database keys in Netlify.
+        </p>
+      )}
+
       <div className="grid gap-4 md:grid-cols-[18rem_1fr]">
         <aside className="rounded-xl border border-border bg-card p-2">
           {threads === null && (
