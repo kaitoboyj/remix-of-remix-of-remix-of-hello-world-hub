@@ -106,8 +106,10 @@ function Inbox({ onLock }: { onLock: () => void }) {
     try {
       const res = await supportListThreads();
       setThreads(res.threads as SupportThreadSummary[]);
-    } catch {
+      setIssue("");
+    } catch (e) {
       setThreads([]);
+      setIssue(e instanceof Error && e.message ? e.message : "Could not load conversations");
     }
   }, []);
 
@@ -118,8 +120,9 @@ function Inbox({ onLock }: { onLock: () => void }) {
       setMessages(res.messages);
       setMode(res.chat_mode);
       setLabel(res.custom_label ?? "");
-    } catch {
-      /* silent */
+      setIssue("");
+    } catch (e) {
+      setIssue(e instanceof Error && e.message ? e.message : "Could not load this conversation");
     }
   }, []);
 
