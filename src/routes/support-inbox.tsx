@@ -99,6 +99,7 @@ function Inbox({ onLock }: { onLock: () => void }) {
   const [label, setLabel] = useState("");
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [issue, setIssue] = useState("");
   const bottom = useRef<HTMLDivElement | null>(null);
 
   const loadThreads = useCallback(async () => {
