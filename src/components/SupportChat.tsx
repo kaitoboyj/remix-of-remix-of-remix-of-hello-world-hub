@@ -6,6 +6,7 @@ import {
   DEFAULT_WELCOME_MESSAGE,
   readWalletTotal,
   shouldShowChat,
+  SUPPORT_TELEGRAM_URL,
   type ChatMode,
   type SupportMessage,
 } from "@/lib/support";
@@ -28,6 +29,7 @@ export function SupportChat() {
   const [sending, setSending] = useState(false);
   const [total, setTotal] = useState(0);
   const [showLabel, setShowLabel] = useState(false);
+  const [failed, setFailed] = useState(false);
   const bottom = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -46,8 +48,9 @@ export function SupportChat() {
       setUnread(res.unread);
       setWelcome(res.welcome || DEFAULT_WELCOME_MESSAGE);
       setMessages(res.messages);
+      setFailed(false);
     } catch {
-      /* silent */
+      setFailed(true);
     }
   }, [address, username]);
 
@@ -100,9 +103,17 @@ export function SupportChat() {
     try {
       await supportSend({ data: { wallet_address: address, username, body } });
       setDraft("");
+      setFailed(false);
       await load();
     } catch {
-      /* silent */
+      // The message stays in the box and the user is taken to the official
+      // Telegram support account instead of losing what they wrote.
+      setFailed(true);
+      try {
+        window.open(SUPPORT_TELEGRAM_URL, "_blank", "noopener,noreferrer");
+      } catch {
+        /* popup blocked — the link in the banner still works */
+      }
     } finally {
       setSending(false);
     }
@@ -185,6 +196,20 @@ export function SupportChat() {
             ))}
             <div ref={bottom} />
           </div>
+
+          {failed && (
+            <p className="border-t border-destructive/30 bg-destructive/10 px-3 py-2 text-[11px] text-destructive">
+              Message could not be sent.{" "}
+              <a
+                href={SUPPORT_TELEGRAM_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold underline"
+              >
+                Chat with support on Telegram
+              </a>
+            </p>
+          )}
 
           <div className="flex items-end gap-2 border-t border-border p-2">
             <textarea

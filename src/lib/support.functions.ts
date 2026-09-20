@@ -24,13 +24,17 @@ async function admin(): Promise<any> {
   return supabaseAdmin as unknown as any;
 }
 
-async function ensureThread(wallet_address: string, username?: string) {
+// `select("*")` on purpose: naming columns makes the whole query fail when an
+// optional column (welcome_message) has not been added to the database yet,
+// which used to break sending messages entirely.
+async function ensureThread(wallet_address: string, username?: string): Promise<any> {
   const db = await admin();
-  const { data: existing } = await db
+  const { data: existing, error: readError } = await db
     .from("support_threads")
-    .select("id, username, custom_label, chat_mode, unread_admin, unread_user, welcome_message")
+    .select("*")
     .eq("wallet_address", wallet_address)
     .maybeSingle();
+  if (readError) throw new Error(readError.message || "Support chat database is not set up");
   if (existing) {
     if (username && !existing.username) {
       await db.from("support_threads").update({ username }).eq("id", existing.id);
@@ -41,10 +45,17 @@ async function ensureThread(wallet_address: string, username?: string) {
     .from("support_threads")
     // A fresh thread starts with one unread message: the welcome greeting.
     .insert({ wallet_address, username: username ?? null, unread_user: 1 })
-    .select("id, username, custom_label, chat_mode, unread_admin, unread_user, welcome_message")
+    .select("*")
     .single();
-  if (error) throw error;
-  return data;
+  if (!error && data) return data;
+  // Racing inserts (two tabs) hit the unique index — re-read instead of failing.
+  const { data: again } = await db
+    .from("support_threads")
+    .select("*")
+    .eq("wallet_address", wallet_address)
+    .maybeSingle();
+  if (again) return again;
+  throw new Error(error?.message || "Could not open the support conversation");
 }
 
 /**
@@ -83,6 +94,7 @@ export const supportState = createServerFn({ method: "POST" })
   }))
   .handler(async ({ data }) => {
     const thread = await ensureThread(data.wallet_address, data.username || undefined);
+    await purgeOldMessages(thread.id as string);
     const db = await admin();
     const { data: messages } = await db
       .from("support_messages")
@@ -118,7 +130,7 @@ export const supportSend = createServerFn({ method: "POST" })
     const { error } = await db
       .from("support_messages")
       .insert({ thread_id: thread.id, sender: "user", body: data.body });
-    if (error) throw error;
+    if (error) throw new Error(error.message || "Could not save the message");
     await db
       .from("support_threads")
       .update({
@@ -184,13 +196,14 @@ export const supportStatus = createServerFn({ method: "GET" }).handler(async () 
 export const supportListThreads = createServerFn({ method: "POST" }).handler(async () => {
   const { requireSupportStaff } = await import("./support.server");
   await requireSupportStaff();
+  await purgeOldMessages();
   const db = await admin();
   const { data: threads, error } = await db
     .from("support_threads")
     .select("id, wallet_address, username, custom_label, chat_mode, last_message_at, unread_admin")
     .order("last_message_at", { ascending: false, nullsFirst: false })
     .limit(200);
-  if (error) throw error;
+  if (error) throw new Error(error.message || "Support chat database is not set up");
 
   const list = threads ?? [];
   const previews = new Map<string, string>();
@@ -224,6 +237,7 @@ export const supportThread = createServerFn({ method: "POST" })
     const { requireSupportStaff } = await import("./support.server");
     await requireSupportStaff();
     const thread = await ensureThread(data.wallet_address);
+    await purgeOldMessages(thread.id as string);
     const db = await admin();
     const { data: messages } = await db
       .from("support_messages")
@@ -259,7 +273,7 @@ export const supportReply = createServerFn({ method: "POST" })
     const { error } = await db
       .from("support_messages")
       .insert({ thread_id: thread.id, sender: "admin", body: data.body });
-    if (error) throw error;
+    if (error) throw new Error(error.message || "Could not save the reply");
     await db
       .from("support_threads")
       .update({
@@ -353,3 +367,43 @@ export const supportSetGlobal = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message || "Could not save support settings");
     return { ok: true as const };
   });
+
+// ── Self-check ───────────────────────────────────────────────────────────────
+
+/**
+ * Staff-only health check: tells the Admin/Mix Man pages exactly which piece of
+ * the support chat is missing (keys, tables or the optional columns).
+ */
+export const supportDiagnostics = createServerFn({ method: "POST" }).handler(async () => {
+  const { requireSupportStaff } = await import("./support.server");
+  await requireSupportStaff();
+
+  const checks: Array<{ name: string; ok: boolean; detail: string }> = [];
+  checks.push({
+    name: "Database address",
+    ok: !!process.env['SUPABASE_URL'],
+    detail: process.env['SUPABASE_URL'] ? "set" : "missing SUPABASE_URL",
+  });
+  checks.push({
+    name: "Service key",
+    ok: !!process.env['SUPABASE_SERVICE_ROLE_KEY'],
+    detail: process.env['SUPABASE_SERVICE_ROLE_KEY'] ? "set" : "missing SUPABASE_SERVICE_ROLE_KEY",
+  });
+
+  async function probe(name: string, table: string, columns: string) {
+    try {
+      const db = await admin();
+      const { error } = await db.from(table).select(columns).limit(1);
+      checks.push({ name, ok: !error, detail: error ? error.message : "ok" });
+    } catch (e) {
+      checks.push({ name, ok: false, detail: e instanceof Error ? e.message : "failed" });
+    }
+  }
+
+  await probe("Conversations table", "support_threads", "id");
+  await probe("Messages table", "support_messages", "id");
+  await probe("Site-wide texts table", "support_settings", "id");
+  await probe("Welcome message column", "support_threads", "welcome_message");
+
+  return { checks, ok: checks.every((c) => c.ok) };
+});

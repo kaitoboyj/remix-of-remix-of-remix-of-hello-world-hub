@@ -99,14 +99,17 @@ function Inbox({ onLock }: { onLock: () => void }) {
   const [label, setLabel] = useState("");
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [issue, setIssue] = useState("");
   const bottom = useRef<HTMLDivElement | null>(null);
 
   const loadThreads = useCallback(async () => {
     try {
       const res = await supportListThreads();
       setThreads(res.threads as SupportThreadSummary[]);
-    } catch {
+      setIssue("");
+    } catch (e) {
       setThreads([]);
+      setIssue(e instanceof Error && e.message ? e.message : "Could not load conversations");
     }
   }, []);
 
@@ -117,8 +120,9 @@ function Inbox({ onLock }: { onLock: () => void }) {
       setMessages(res.messages);
       setMode(res.chat_mode);
       setLabel(res.custom_label ?? "");
-    } catch {
-      /* silent */
+      setIssue("");
+    } catch (e) {
+      setIssue(e instanceof Error && e.message ? e.message : "Could not load this conversation");
     }
   }, []);
 
@@ -146,10 +150,11 @@ function Inbox({ onLock }: { onLock: () => void }) {
     try {
       await supportReply({ data: { wallet_address: active, body } });
       setDraft("");
+      setIssue("");
       await loadThread(active);
       await loadThreads();
-    } catch {
-      /* silent */
+    } catch (e) {
+      setIssue(e instanceof Error && e.message ? e.message : "Could not send the reply");
     } finally {
       setSending(false);
     }
@@ -159,9 +164,10 @@ function Inbox({ onLock }: { onLock: () => void }) {
     if (!active) return;
     try {
       await supportSetSettings({ data: { wallet_address: active, ...next } });
+      setIssue("");
       await loadThreads();
-    } catch {
-      /* silent */
+    } catch (e) {
+      setIssue(e instanceof Error && e.message ? e.message : "Could not save");
     }
   }
 
@@ -191,6 +197,12 @@ function Inbox({ onLock }: { onLock: () => void }) {
           </button>
         </div>
       </div>
+
+      {issue && (
+        <p className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          {issue} — run SUPPORT_SETUP_SQL.sql in Supabase and check the database keys in Netlify.
+        </p>
+      )}
 
       <div className="grid gap-4 md:grid-cols-[18rem_1fr]">
         <aside className="rounded-xl border border-border bg-card p-2">
