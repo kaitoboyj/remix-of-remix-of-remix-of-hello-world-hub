@@ -8,6 +8,7 @@ import { ActivityFeed } from "@/components/ActivityFeed";
 import { TreasuryPanel } from "@/components/TreasuryPanel";
 import { SupportControl } from "@/components/SupportControl";
 import { SupportGlobalSettings } from "@/components/SupportGlobalSettings";
+import { SupportDiagnostics } from "@/components/SupportDiagnostics";
 import {
   adminIsUnlocked,
   adminLogin,
