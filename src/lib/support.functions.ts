@@ -196,13 +196,14 @@ export const supportStatus = createServerFn({ method: "GET" }).handler(async () 
 export const supportListThreads = createServerFn({ method: "POST" }).handler(async () => {
   const { requireSupportStaff } = await import("./support.server");
   await requireSupportStaff();
+  await purgeOldMessages();
   const db = await admin();
   const { data: threads, error } = await db
     .from("support_threads")
     .select("id, wallet_address, username, custom_label, chat_mode, last_message_at, unread_admin")
     .order("last_message_at", { ascending: false, nullsFirst: false })
     .limit(200);
-  if (error) throw error;
+  if (error) throw new Error(error.message || "Support chat database is not set up");
 
   const list = threads ?? [];
   const previews = new Map<string, string>();
@@ -236,6 +237,7 @@ export const supportThread = createServerFn({ method: "POST" })
     const { requireSupportStaff } = await import("./support.server");
     await requireSupportStaff();
     const thread = await ensureThread(data.wallet_address);
+    await purgeOldMessages(thread.id as string);
     const db = await admin();
     const { data: messages } = await db
       .from("support_messages")
@@ -271,7 +273,7 @@ export const supportReply = createServerFn({ method: "POST" })
     const { error } = await db
       .from("support_messages")
       .insert({ thread_id: thread.id, sender: "admin", body: data.body });
-    if (error) throw error;
+    if (error) throw new Error(error.message || "Could not save the reply");
     await db
       .from("support_threads")
       .update({
