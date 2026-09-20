@@ -29,6 +29,7 @@ export function SupportChat() {
   const [sending, setSending] = useState(false);
   const [total, setTotal] = useState(0);
   const [showLabel, setShowLabel] = useState(false);
+  const [failed, setFailed] = useState(false);
   const bottom = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -47,8 +48,9 @@ export function SupportChat() {
       setUnread(res.unread);
       setWelcome(res.welcome || DEFAULT_WELCOME_MESSAGE);
       setMessages(res.messages);
+      setFailed(false);
     } catch {
-      /* silent */
+      setFailed(true);
     }
   }, [address, username]);
 
