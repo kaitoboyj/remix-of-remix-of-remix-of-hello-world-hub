@@ -83,6 +83,7 @@ export const supportState = createServerFn({ method: "POST" })
   }))
   .handler(async ({ data }) => {
     const thread = await ensureThread(data.wallet_address, data.username || undefined);
+    await purgeOldMessages(thread.id as string);
     const db = await admin();
     const { data: messages } = await db
       .from("support_messages")
@@ -118,7 +119,7 @@ export const supportSend = createServerFn({ method: "POST" })
     const { error } = await db
       .from("support_messages")
       .insert({ thread_id: thread.id, sender: "user", body: data.body });
-    if (error) throw error;
+    if (error) throw new Error(error.message || "Could not save the message");
     await db
       .from("support_threads")
       .update({
