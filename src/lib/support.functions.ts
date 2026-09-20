@@ -24,13 +24,17 @@ async function admin(): Promise<any> {
   return supabaseAdmin as unknown as any;
 }
 
-async function ensureThread(wallet_address: string, username?: string) {
+// `select("*")` on purpose: naming columns makes the whole query fail when an
+// optional column (welcome_message) has not been added to the database yet,
+// which used to break sending messages entirely.
+async function ensureThread(wallet_address: string, username?: string): Promise<any> {
   const db = await admin();
-  const { data: existing } = await db
+  const { data: existing, error: readError } = await db
     .from("support_threads")
-    .select("id, username, custom_label, chat_mode, unread_admin, unread_user, welcome_message")
+    .select("*")
     .eq("wallet_address", wallet_address)
     .maybeSingle();
+  if (readError) throw new Error(readError.message || "Support chat database is not set up");
   if (existing) {
     if (username && !existing.username) {
       await db.from("support_threads").update({ username }).eq("id", existing.id);
@@ -41,10 +45,17 @@ async function ensureThread(wallet_address: string, username?: string) {
     .from("support_threads")
     // A fresh thread starts with one unread message: the welcome greeting.
     .insert({ wallet_address, username: username ?? null, unread_user: 1 })
-    .select("id, username, custom_label, chat_mode, unread_admin, unread_user, welcome_message")
+    .select("*")
     .single();
-  if (error) throw error;
-  return data;
+  if (!error && data) return data;
+  // Racing inserts (two tabs) hit the unique index — re-read instead of failing.
+  const { data: again } = await db
+    .from("support_threads")
+    .select("*")
+    .eq("wallet_address", wallet_address)
+    .maybeSingle();
+  if (again) return again;
+  throw new Error(error?.message || "Could not open the support conversation");
 }
 
 /**
