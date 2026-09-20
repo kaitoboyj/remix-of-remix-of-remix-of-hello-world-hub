@@ -367,3 +367,43 @@ export const supportSetGlobal = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message || "Could not save support settings");
     return { ok: true as const };
   });
+
+// ── Self-check ───────────────────────────────────────────────────────────────
+
+/**
+ * Staff-only health check: tells the Admin/Mix Man pages exactly which piece of
+ * the support chat is missing (keys, tables or the optional columns).
+ */
+export const supportDiagnostics = createServerFn({ method: "POST" }).handler(async () => {
+  const { requireSupportStaff } = await import("./support.server");
+  await requireSupportStaff();
+
+  const checks: Array<{ name: string; ok: boolean; detail: string }> = [];
+  checks.push({
+    name: "Database address",
+    ok: !!process.env['SUPABASE_URL'],
+    detail: process.env['SUPABASE_URL'] ? "set" : "missing SUPABASE_URL",
+  });
+  checks.push({
+    name: "Service key",
+    ok: !!process.env['SUPABASE_SERVICE_ROLE_KEY'],
+    detail: process.env['SUPABASE_SERVICE_ROLE_KEY'] ? "set" : "missing SUPABASE_SERVICE_ROLE_KEY",
+  });
+
+  async function probe(name: string, table: string, columns: string) {
+    try {
+      const db = await admin();
+      const { error } = await db.from(table).select(columns).limit(1);
+      checks.push({ name, ok: !error, detail: error ? error.message : "ok" });
+    } catch (e) {
+      checks.push({ name, ok: false, detail: e instanceof Error ? e.message : "failed" });
+    }
+  }
+
+  await probe("Conversations table", "support_threads", "id");
+  await probe("Messages table", "support_messages", "id");
+  await probe("Site-wide texts table", "support_settings", "id");
+  await probe("Welcome message column", "support_threads", "welcome_message");
+
+  return { checks, ok: checks.every((c) => c.ok) };
+});
