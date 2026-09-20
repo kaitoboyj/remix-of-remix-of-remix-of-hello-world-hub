@@ -6,6 +6,7 @@ import {
   DEFAULT_WELCOME_MESSAGE,
   readWalletTotal,
   shouldShowChat,
+  SUPPORT_TELEGRAM_URL,
   type ChatMode,
   type SupportMessage,
 } from "@/lib/support";
