@@ -260,6 +260,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                 <TreasuryPanel address={addr} />
                 <div className="space-y-3">
                   <SupportGlobalSettings />
+                  <SupportDiagnostics />
                   <SupportControl address={addr} />
                 </div>
               </div>

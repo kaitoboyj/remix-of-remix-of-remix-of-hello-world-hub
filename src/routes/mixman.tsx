@@ -166,6 +166,7 @@ function MixManPage() {
           <TreasuryPanel address={session.address} />
           <div className="space-y-3">
             <SupportGlobalSettings />
+            <SupportDiagnostics />
             <SupportControl address={session.address} />
             <p className="text-xs text-muted-foreground">
               Read and reply to messages in the{" "}
