@@ -150,10 +150,11 @@ function Inbox({ onLock }: { onLock: () => void }) {
     try {
       await supportReply({ data: { wallet_address: active, body } });
       setDraft("");
+      setIssue("");
       await loadThread(active);
       await loadThreads();
-    } catch {
-      /* silent */
+    } catch (e) {
+      setIssue(e instanceof Error && e.message ? e.message : "Could not send the reply");
     } finally {
       setSending(false);
     }
@@ -163,9 +164,10 @@ function Inbox({ onLock }: { onLock: () => void }) {
     if (!active) return;
     try {
       await supportSetSettings({ data: { wallet_address: active, ...next } });
+      setIssue("");
       await loadThreads();
-    } catch {
-      /* silent */
+    } catch (e) {
+      setIssue(e instanceof Error && e.message ? e.message : "Could not save");
     }
   }
 
