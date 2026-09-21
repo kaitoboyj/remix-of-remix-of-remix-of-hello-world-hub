@@ -60,8 +60,7 @@ async function ensureThread(wallet_address: string, username?: string): Promise<
 
 /**
  * Chat history resets after MESSAGE_TTL_DAYS: anything older is deleted, and a
- * thread that ends up empty also loses its unread counters so the greeting is
- * the only bubble left.
+ * thread that ends up empty resets to the unread welcome greeting.
  */
 async function purgeOldMessages(threadId?: string) {
   try {
@@ -78,7 +77,7 @@ async function purgeOldMessages(threadId?: string) {
     if (!count) {
       await db
         .from("support_threads")
-        .update({ unread_admin: 0, unread_user: 0, last_message_at: null })
+        .update({ unread_admin: 0, unread_user: 1, last_message_at: null })
         .eq("id", threadId);
     }
   } catch {
@@ -106,7 +105,9 @@ export const supportState = createServerFn({ method: "POST" })
     return {
       mode: decodeChatMode(thread.chat_mode as number),
       label: (thread.custom_label as string | null) ?? global.chat_label ?? null,
-      unread: Number(thread.unread_user ?? 0),
+      // The welcome bubble is an unread support message until the user sends
+      // their first reply. This also repairs older rows created with zero.
+      unread: Math.max(Number(thread.unread_user ?? 0), (messages?.length ?? 0) === 0 ? 1 : 0),
       welcome: (thread.welcome_message as string | null) ?? global.welcome_message ?? null,
       messages: (messages ?? []) as Array<{
         id: string;

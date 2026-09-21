@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS public.support_threads (
   chat_mode SMALLINT NOT NULL DEFAULT 0,
   last_message_at TIMESTAMPTZ,
   unread_admin INTEGER NOT NULL DEFAULT 0,
-  unread_user INTEGER NOT NULL DEFAULT 0,
+  unread_user INTEGER NOT NULL DEFAULT 1,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -25,6 +25,8 @@ ALTER TABLE public.support_threads
   ADD COLUMN IF NOT EXISTS welcome_message TEXT;
 ALTER TABLE public.support_threads
   ADD COLUMN IF NOT EXISTS custom_label TEXT;
+ALTER TABLE public.support_threads
+  ALTER COLUMN unread_user SET DEFAULT 1;
 
 CREATE TABLE IF NOT EXISTS public.support_messages (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -79,3 +81,10 @@ CREATE POLICY "No direct client access to support settings"
 -- Housekeeping: chat history older than 4 days is also cleared by the site
 -- itself every time a chat or the inbox is opened.
 DELETE FROM public.support_messages WHERE created_at < now() - INTERVAL '4 days';
+
+-- Existing conversations with no saved messages should show the welcome badge.
+UPDATE public.support_threads AS thread
+SET unread_user = 1
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.support_messages AS message WHERE message.thread_id = thread.id
+);
