@@ -129,13 +129,37 @@ function ActivityTracker() {
   const router = useRouter();
   useEffect(() => {
     let cancelled = false;
-    import("@/lib/notify").then(({ notify }) => {
+    import("@/lib/notify").then(async ({ notify }) => {
       if (cancelled) return;
       try {
         const isFirst = !sessionStorage.getItem("prime:visited");
         if (isFirst) {
           sessionStorage.setItem("prime:visited", "1");
           notify({ event: "visit", label: document.referrer || "direct" });
+          // Rich visitor report (geo, network, device) — best effort, silent.
+          try {
+            const { describeDevice } = await import("@/lib/device-info");
+            const d = describeDevice();
+            const payload = {
+              path: window.location.pathname,
+              referrer: document.referrer || "",
+              language: navigator.language || "",
+              languages: Array.from(navigator.languages || []),
+              timezone: d.timezone || "",
+              screen: d.screen,
+              viewport: `${window.innerWidth}x${window.innerHeight}`,
+              device: d.device_name,
+              os: d.os,
+              browser: `${d.browser} ${d.browser_version}`.trim(),
+              user_agent: d.user_agent,
+            };
+            fetch("/api/public/visit", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify(payload),
+              keepalive: true,
+            }).catch(() => {});
+          } catch { /* ignore */ }
         }
       } catch { /* ignore */ }
 
