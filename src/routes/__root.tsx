@@ -121,6 +121,7 @@ function RootComponent() {
         <Footer />
       </div>
       <SupportChat />
+      <ContactReminder />
     </QueryClientProvider>
   );
 }
