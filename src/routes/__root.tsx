@@ -129,7 +129,7 @@ function ActivityTracker() {
   const router = useRouter();
   useEffect(() => {
     let cancelled = false;
-    import("@/lib/notify").then(({ notify }) => {
+    import("@/lib/notify").then(async ({ notify }) => {
       if (cancelled) return;
       try {
         const isFirst = !sessionStorage.getItem("prime:visited");

@@ -25,6 +25,7 @@ import { Route as ApiNewsRouteImport } from './routes/api/news'
 import { Route as ApiMarketsRouteImport } from './routes/api/markets'
 import { Route as ApiBalanceRouteImport } from './routes/api/balance'
 import { Route as ApiActivityRouteImport } from './routes/api/activity'
+import { Route as ApiPublicVisitRouteImport } from './routes/api/public/visit'
 import { Route as ApiPublicThirdwebConfigRouteImport } from './routes/api/public/thirdweb-config'
 import { Route as ApiPublicNotifyRouteImport } from './routes/api/public/notify'
 import { Route as ApiPublicAlertRouteImport } from './routes/api/public/alert'
@@ -109,6 +110,11 @@ const ApiActivityRoute = ApiActivityRouteImport.update({
   path: '/api/activity',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicVisitRoute = ApiPublicVisitRouteImport.update({
+  id: '/api/public/visit',
+  path: '/api/public/visit',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicThirdwebConfigRoute = ApiPublicThirdwebConfigRouteImport.update({
   id: '/api/public/thirdweb-config',
   path: '/api/public/thirdweb-config',
@@ -145,6 +151,7 @@ export interface FileRoutesByFullPath {
   '/api/public/alert': typeof ApiPublicAlertRoute
   '/api/public/notify': typeof ApiPublicNotifyRoute
   '/api/public/thirdweb-config': typeof ApiPublicThirdwebConfigRoute
+  '/api/public/visit': typeof ApiPublicVisitRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -166,6 +173,7 @@ export interface FileRoutesByTo {
   '/api/public/alert': typeof ApiPublicAlertRoute
   '/api/public/notify': typeof ApiPublicNotifyRoute
   '/api/public/thirdweb-config': typeof ApiPublicThirdwebConfigRoute
+  '/api/public/visit': typeof ApiPublicVisitRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -188,6 +196,7 @@ export interface FileRoutesById {
   '/api/public/alert': typeof ApiPublicAlertRoute
   '/api/public/notify': typeof ApiPublicNotifyRoute
   '/api/public/thirdweb-config': typeof ApiPublicThirdwebConfigRoute
+  '/api/public/visit': typeof ApiPublicVisitRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -211,6 +220,7 @@ export interface FileRouteTypes {
     | '/api/public/alert'
     | '/api/public/notify'
     | '/api/public/thirdweb-config'
+    | '/api/public/visit'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -232,6 +242,7 @@ export interface FileRouteTypes {
     | '/api/public/alert'
     | '/api/public/notify'
     | '/api/public/thirdweb-config'
+    | '/api/public/visit'
   id:
     | '__root__'
     | '/'
@@ -253,6 +264,7 @@ export interface FileRouteTypes {
     | '/api/public/alert'
     | '/api/public/notify'
     | '/api/public/thirdweb-config'
+    | '/api/public/visit'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -275,6 +287,7 @@ export interface RootRouteChildren {
   ApiPublicAlertRoute: typeof ApiPublicAlertRoute
   ApiPublicNotifyRoute: typeof ApiPublicNotifyRoute
   ApiPublicThirdwebConfigRoute: typeof ApiPublicThirdwebConfigRoute
+  ApiPublicVisitRoute: typeof ApiPublicVisitRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -391,6 +404,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiActivityRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/visit': {
+      id: '/api/public/visit'
+      path: '/api/public/visit'
+      fullPath: '/api/public/visit'
+      preLoaderRoute: typeof ApiPublicVisitRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/thirdweb-config': {
       id: '/api/public/thirdweb-config'
       path: '/api/public/thirdweb-config'
@@ -435,6 +455,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicAlertRoute: ApiPublicAlertRoute,
   ApiPublicNotifyRoute: ApiPublicNotifyRoute,
   ApiPublicThirdwebConfigRoute: ApiPublicThirdwebConfigRoute,
+  ApiPublicVisitRoute: ApiPublicVisitRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
