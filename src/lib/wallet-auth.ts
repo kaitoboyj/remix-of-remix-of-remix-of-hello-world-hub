@@ -57,6 +57,8 @@ const SESSION_KEY = "prime:session:v1";
 export interface WalletSession {
   address: string;
   username: string;
+  /** Optional contact the user linked to the account (phone number or email). */
+  contact?: string;
   wallet?: WalletSnapshot;
 }
 
