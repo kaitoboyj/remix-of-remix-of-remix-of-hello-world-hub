@@ -43,7 +43,10 @@ export interface SupportThreadSummary {
 export function shouldShowChat(mode: ChatMode, totalUsd: number) {
   if (mode === "on") return true;
   if (mode === "off") return false;
-  return totalUsd > CHAT_MIN_USD;
+  // Auto: show for every signed-in wallet once it has any recorded activity,
+  // and also while the total is still unknown (0 = not yet recorded), so the
+  // icon never disappears for a logged-in user.
+  return totalUsd >= 0;
 }
 
 const TOTAL_PREFIX = "prime:total:";
