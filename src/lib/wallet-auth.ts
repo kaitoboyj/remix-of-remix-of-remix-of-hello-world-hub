@@ -57,6 +57,8 @@ const SESSION_KEY = "prime:session:v1";
 export interface WalletSession {
   address: string;
   username: string;
+  /** Optional contact the user linked to the account (phone number or email). */
+  contact?: string;
   wallet?: WalletSnapshot;
 }
 
@@ -207,6 +209,19 @@ export function clearSession(address?: string) {
   }
   announce();
   trackDeviceLogout(target);
+}
+
+/** Link a phone number (or email) to an account already signed in on this device. */
+export function setSessionContact(contact: string, address?: string) {
+  const target = address ?? loadSession()?.address;
+  if (!target) return;
+  const list = readAccounts().map((s) => (s.address === target ? { ...s, contact } : s));
+  writeAccounts(list);
+  const active = loadSession();
+  if (active && active.address === target) {
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ ...active, contact }));
+  }
+  announce();
 }
 
 /** Sign out every account on this device. */
